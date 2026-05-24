@@ -60,6 +60,12 @@ async def main():
         print(f"Product SKU: {api._product_sku}")
         print(f"Next delivery week: {api.next_delivery_week}")
         print(f"Next modifiable week: {api.next_modifiable_week}")
+
+        # Dump full subscription response
+        os.makedirs("debug", exist_ok=True)
+        with open("debug/test_subscription.json", "w", encoding="utf-8") as f:
+            json.dump(sub, f, indent=2, ensure_ascii=False)
+        print("Full subscription response dumped to debug/test_subscription.json")
     else:
         print("FAILED to fetch subscription")
         return
@@ -103,6 +109,10 @@ async def main():
         for m in selected2:
             recipe = m.get("recipe", {})
             print(f"  - {recipe.get('name')} ({recipe.get('prepTime')})")
+
+        with open(f"debug/test_menu_{next_week}.json", "w", encoding="utf-8") as f:
+            json.dump(menu2, f, indent=2, ensure_ascii=False)
+        print(f"\nFull response dumped to debug/test_menu_{next_week}.json")
     else:
         print("FAILED to fetch menu")
 

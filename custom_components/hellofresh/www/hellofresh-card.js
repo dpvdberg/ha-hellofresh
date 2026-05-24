@@ -72,11 +72,16 @@ class HelloFreshCard extends HTMLElement {
           display: flex;
           align-items: center;
           gap: 8px;
-          margin-bottom: 12px;
+          margin-bottom: 4px;
         }
         .week-label {
           font-weight: bold;
           font-size: 1.1em;
+        }
+        .badges {
+          display: flex;
+          gap: 6px;
+          margin-bottom: 12px;
         }
         .badge {
           display: inline-block;
@@ -261,11 +266,26 @@ class HelloFreshCard extends HTMLElement {
 
     content.innerHTML = `
       <div class="week-header">
-        <span class="week-label">${currentWeekKey}</span>
-        ${badges}
+        <span class="week-label">${this._formatWeekLabel(currentWeekKey, weekData)}</span>
       </div>
+      <div class="badges">${badges}</div>
       ${mealsHtml}
     `;
+  }
+
+  _formatWeekLabel(weekKey, weekData) {
+    // "2026-W22" → "2026 Week 22 · ma 25 mei"
+    const match = weekKey.match(/^(\d{4})-W(\d{2})$/);
+    if (!match) return weekKey;
+    const year = match[1];
+    const week = parseInt(match[2]);
+    let label = `${year} Week ${week}`;
+    if (weekData && weekData.delivery_date) {
+      const d = new Date(weekData.delivery_date);
+      const options = { weekday: "short", day: "numeric", month: "short" };
+      label += ` · ${d.toLocaleDateString("nl-NL", options)}`;
+    }
+    return label;
   }
 
   static getConfigElement() {
