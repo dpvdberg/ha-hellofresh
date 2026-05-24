@@ -2,7 +2,7 @@ from pathlib import Path
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
-from homeassistant.components.frontend import async_register_built_in_panel
+from homeassistant.components.http import StaticPathConfig
 
 from .const import DOMAIN
 from .coordinator import HelloFreshCoordinator
@@ -20,11 +20,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
 
     # Register the Lovelace card as a static file
-    hass.http.register_static_path(
-        CARD_URL,
-        str(Path(__file__).parent / "www" / "hellofresh-card.js"),
-        cache_headers=False,
-    )
+    hass.http.async_register_static_paths([
+        StaticPathConfig(CARD_URL, str(Path(__file__).parent / "www" / "hellofresh-card.js"), cache_headers=False)
+    ])
 
     return True
 
