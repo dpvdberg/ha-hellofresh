@@ -1,15 +1,15 @@
 from pathlib import Path
+import shutil
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
-from homeassistant.components.http import StaticPathConfig
 
 from .const import DOMAIN
 from .coordinator import HelloFreshCoordinator
 
 PLATFORMS = ["sensor"]
 
-CARD_URL = "/hellofresh/hellofresh-card.js"
+CARD_FILENAME = "hellofresh-card.js"
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
@@ -19,12 +19,20 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     hass.data.setdefault(DOMAIN, {})[entry.entry_id] = coordinator
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
 
-    # Register the Lovelace card as a static file
-    hass.http.async_register_static_paths([
-        StaticPathConfig(CARD_URL, str(Path(__file__).parent / "www" / "hellofresh-card.js"), cache_headers=False)
-    ])
+    # Copy the Lovelace card to www/ so it's served at /local/
+    await hass.async_add_executor_job(_install_card, hass.config.path("www"))
 
     return True
+
+
+def _install_card(www_dir: str) -> None:
+    """Copy the card JS file to HA's www/community/hellofresh directory."""
+    dest_dir = Path(www_dir) / "community" / "hellofresh"
+    dest_dir.mkdir(parents=True, exist_ok=True)
+    source = Path(__file__).parent / "www" / CARD_FILENAME
+    dest = dest_dir / CARD_FILENAME
+    if source.exists():
+        shutil.copy2(source, dest)
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
