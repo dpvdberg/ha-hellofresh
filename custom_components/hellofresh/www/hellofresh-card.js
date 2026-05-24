@@ -68,6 +68,29 @@ class HelloFreshCard extends HTMLElement {
           opacity: 0.3;
           cursor: not-allowed;
         }
+        .refresh-btn {
+          background: none;
+          border: none;
+          color: var(--primary-text-color);
+          cursor: pointer;
+          width: 32px;
+          height: 32px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          border-radius: 50%;
+          opacity: 0.6;
+        }
+        .refresh-btn:hover {
+          opacity: 1;
+          background: var(--secondary-background-color);
+        }
+        .refresh-btn.spinning svg {
+          animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+          100% { transform: rotate(360deg); }
+        }
         .week-header {
           display: flex;
           align-items: center;
@@ -158,6 +181,9 @@ class HelloFreshCard extends HTMLElement {
         <div class="header">
           <h2>${this._config.title}</h2>
           <div class="nav-buttons">
+            <button class="refresh-btn" id="refresh-btn" title="Refresh">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M17.65 6.35A7.958 7.958 0 0012 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08A5.99 5.99 0 0112 18c-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/></svg>
+            </button>
             <button class="nav-btn" id="prev-btn">&#8249;</button>
             <button class="nav-btn" id="next-btn">&#8250;</button>
           </div>
@@ -166,6 +192,13 @@ class HelloFreshCard extends HTMLElement {
       </ha-card>
     `;
 
+    this.shadowRoot.getElementById("refresh-btn").addEventListener("click", () => {
+      const btn = this.shadowRoot.getElementById("refresh-btn");
+      btn.classList.add("spinning");
+      this._hass.callService("hellofresh", "refresh").then(() => {
+        setTimeout(() => btn.classList.remove("spinning"), 1000);
+      });
+    });
     this.shadowRoot.getElementById("prev-btn").addEventListener("click", () => {
       if (this._currentWeekIndex > 0) {
         this._currentWeekIndex--;

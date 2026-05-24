@@ -2,7 +2,7 @@ from pathlib import Path
 import shutil
 
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, ServiceCall
 
 from .const import DOMAIN
 from .coordinator import HelloFreshCoordinator
@@ -21,6 +21,15 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     # Copy the Lovelace card to www/ so it's served at /local/
     await hass.async_add_executor_job(_install_card, hass.config.path("www"))
+
+    # Register refresh service (once for all entries)
+    if not hass.services.has_service(DOMAIN, "refresh"):
+        async def handle_refresh(call: ServiceCall) -> None:
+            """Refresh all HelloFresh coordinators."""
+            for coord in hass.data[DOMAIN].values():
+                await coord.async_request_refresh()
+
+        hass.services.async_register(DOMAIN, "refresh", handle_refresh)
 
     return True
 
