@@ -1,0 +1,17 @@
+{
+    "config": {
+        "step": {
+            "user": {
+                "title": "HelloFresh",
+                "description": "Enter your HelloFresh login credentials.",
+                "data": {
+                    "username": "Email",
+                    "password": "Password"
+                }
+            }
+        },
+        "error": {
+            "invalid_auth": "Invalid credentials. Please check and try again."
+        }
+    }
+}
