@@ -46,10 +46,10 @@ class HelloFreshCoordinator(DataUpdateCoordinator):
             days_packing_to_delivery = (delivery_weekday - packing_day) % 7
             cutoff_offset_from_delivery = days_packing_to_delivery + cutoff_days
 
-            # Fetch a window of weeks: current delivery + next 3
+            # Fetch a window of weeks: one before next delivery + next 3
             weeks_data = {}
             if next_week:
-                for offset in range(4):
+                for offset in range(-1, 4):
                     week_str = self.api.week_offset(next_week, offset)
                     menu = await self.api.async_get_menu(week_str)
                     if menu:
