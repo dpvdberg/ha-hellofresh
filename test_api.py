@@ -70,51 +70,37 @@ async def main():
         print("FAILED to fetch subscription")
         return
 
-    # Test menu fetch for next delivery week
-    week = api.next_delivery_week
+    # Fetch per-week delivery info (SKUs)
     print("\n" + "=" * 50)
-    print(f"Fetching menu for {week}...")
-    menu = await api.async_get_menu(week)
-    if menu:
-        print(f"Meals preselected: {menu.get('mealsPreselected')}")
-        selected = [
-            m for m in menu.get("meals", [])
-            if m.get("selection", {}).get("quantity", 0) > 0
-        ]
-        print(f"Selected meals ({len(selected)}):")
-        for m in selected:
-            recipe = m.get("recipe", {})
-            print(f"  - {recipe.get('name')} ({recipe.get('prepTime')})")
+    print("Fetching deliveries (per-week SKUs)...")
+    await api.async_get_deliveries()
+    print(f"Week SKUs: {api._week_skus}")
 
-        # Dump full menu response
-        os.makedirs("debug", exist_ok=True)
-        with open(f"debug/test_menu_{week}.json", "w", encoding="utf-8") as f:
-            json.dump(menu, f, indent=2, ensure_ascii=False)
-        print(f"\nFull response dumped to debug/test_menu_{week}.json")
-    else:
-        print("FAILED to fetch menu")
+    # Test menus for upcoming weeks
+    base_week = api.next_delivery_week
+    os.makedirs("debug", exist_ok=True)
 
-    # Test next week too
-    next_week = api.week_offset(week, 1)
-    print("\n" + "=" * 50)
-    print(f"Fetching menu for {next_week}...")
-    menu2 = await api.async_get_menu(next_week)
-    if menu2:
-        print(f"Meals preselected: {menu2.get('mealsPreselected')}")
-        selected2 = [
-            m for m in menu2.get("meals", [])
-            if m.get("selection", {}).get("quantity", 0) > 0
-        ]
-        print(f"Selected meals ({len(selected2)}):")
-        for m in selected2:
-            recipe = m.get("recipe", {})
-            print(f"  - {recipe.get('name')} ({recipe.get('prepTime')})")
+    for offset in range(-1, 4):
+        week = api.week_offset(base_week, offset)
+        sku = api._week_skus.get(week, api._product_sku)
+        print("\n" + "=" * 50)
+        print(f"Fetching menu for {week} (sku={sku})...")
+        menu = await api.async_get_menu(week)
+        if menu:
+            preselected = menu.get("mealsPreselected")
+            selected = [
+                m for m in menu.get("meals", [])
+                if m.get("selection", {}).get("quantity", 0) > 0
+            ]
+            print(f"Preselected: {preselected}, selected meals: {len(selected)}")
+            for m in selected:
+                recipe = m.get("recipe", {})
+                print(f"  - {recipe.get('name')} ({recipe.get('prepTime')})")
 
-        with open(f"debug/test_menu_{next_week}.json", "w", encoding="utf-8") as f:
-            json.dump(menu2, f, indent=2, ensure_ascii=False)
-        print(f"\nFull response dumped to debug/test_menu_{next_week}.json")
-    else:
-        print("FAILED to fetch menu")
+            with open(f"debug/test_menu_{week}.json", "w", encoding="utf-8") as f:
+                json.dump(menu, f, indent=2, ensure_ascii=False)
+        else:
+            print("FAILED to fetch menu")
 
 
 if __name__ == "__main__":

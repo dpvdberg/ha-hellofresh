@@ -33,6 +33,9 @@ class HelloFreshCoordinator(DataUpdateCoordinator):
             next_week = self.api.next_delivery_week
             modifiable_week = self.api.next_modifiable_week
 
+            # Fetch per-week delivery info (includes correct SKU per week)
+            await self.api.async_get_deliveries()
+
             # Extract delivery timing info from subscription
             delivery_weekday = sub.get("deliveryWeekday", 1)  # 1=Monday
             delivery_option = sub.get("deliveryOption", {})

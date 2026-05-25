@@ -21,6 +21,7 @@ class HelloFreshAPI:
         self._session: cffi_requests.Session | None = None
         self._subscription_id: str | None = None
         self._product_sku: str | None = None
+        self._week_skus: dict[str, str] = {}
         self._next_delivery_week: str | None = None
         self._next_modifiable_week: str | None = None
 
@@ -161,6 +162,7 @@ class HelloFreshAPI:
                 self._product_sku = sub.get("product", {}).get("sku")
                 self._next_delivery_week = sub.get("nextDeliveryWeek")
                 self._next_modifiable_week = sub.get("nextModifiableDeliveryWeek")
+
                 return sub
         return None
 
@@ -175,18 +177,43 @@ class HelloFreshAPI:
             return None
         return resp.json()
 
+    async def async_get_deliveries(self) -> None:
+        """Fetch per-week delivery info to get the correct SKU per week."""
+        await self._ensure_token()
+        data = await self._hass_async_run(self._do_get_deliveries)
+        if data:
+            for item in data.get("items", []):
+                week_id = item.get("id")
+                product = item.get("product", {})
+                sku = product.get("handle") or product.get("sku")
+                if week_id and sku:
+                    self._week_skus[week_id] = sku
+
+    def _do_get_deliveries(self) -> dict | None:
+        session = self._get_session()
+        resp = session.get(
+            f"{self._base_url}api/customers/me/deliveries",
+            headers=self._get_api_headers(),
+        )
+        if resp.status_code != 200:
+            _LOGGER.warning("Deliveries request failed: %s", resp.status_code)
+            return None
+        return resp.json()
+
     async def async_get_menu(self, week: str) -> dict | None:
-        """Fetch the menu for a given week."""
+        """Fetch the menu for a given week using the correct per-week SKU."""
         await self._ensure_token()
         if not self._subscription_id or not self._product_sku:
             await self.async_get_subscription()
-        return await self._hass_async_run(self._do_get_menu, week)
+        # Use per-week SKU from deliveries, fall back to subscription default
+        sku = self._week_skus.get(week, self._product_sku)
+        return await self._hass_async_run(self._do_get_menu, week, sku)
 
-    def _do_get_menu(self, week: str) -> dict | None:
+    def _do_get_menu(self, week: str, sku: str = None) -> dict | None:
         session = self._get_session()
         params = {
             "subscription": self._subscription_id,
-            "product-sku": self._product_sku,
+            "product-sku": sku or self._product_sku,
             "week": week,
         }
         resp = session.get(
@@ -195,7 +222,7 @@ class HelloFreshAPI:
             headers=self._get_api_headers(),
         )
         if resp.status_code != 200:
-            _LOGGER.warning("Menu request for %s failed: %s", week, resp.status_code)
+            _LOGGER.warning("Menu request for %s (sku=%s) failed: %s", week, sku, resp.status_code)
             return None
         return resp.json()
 
@@ -215,6 +242,7 @@ class HelloFreshAPI:
     def week_offset(week_str: str, offset: int) -> str:
         """Calculate a week string offset by N weeks."""
         year, w = week_str.split("-W")
-        date = datetime.strptime(f"{year}-W{int(w):02d}-1", "%Y-W%W-%w")
+        date = datetime.strptime(f"{year}-W{int(w):02d}-1", "%G-W%V-%u")
         target = date + timedelta(weeks=offset)
-        return f"{target.year}-W{target.strftime('%V')}"
+        iso = target.isocalendar()
+        return f"{iso[0]}-W{iso[1]:02d}"
