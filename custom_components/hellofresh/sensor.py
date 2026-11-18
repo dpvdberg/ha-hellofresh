@@ -36,6 +36,9 @@ class HelloFreshMenuSensor(CoordinatorEntity, SensorEntity):
     _attr_has_entity_name = True
     _attr_name = "Upcoming Menus"
     _attr_icon = "mdi:food"
+    # The menus are large (recipes, images, nutrition for ~5 weeks): keep them out of the
+    # recorder database. They stay available on the live state for cards and other apps.
+    _unrecorded_attributes = frozenset({"weeks"})
 
     def __init__(self, coordinator: HelloFreshCoordinator, entry: ConfigEntry) -> None:
         super().__init__(coordinator)

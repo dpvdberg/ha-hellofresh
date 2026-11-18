@@ -1,5 +1,6 @@
 from datetime import datetime, timedelta
 import logging
+import re
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
@@ -9,6 +10,19 @@ from .api import HelloFreshAPI
 from .const import CONF_USERNAME, CONF_PASSWORD, SCAN_INTERVAL_MINUTES
 
 _LOGGER = logging.getLogger(__name__)
+
+_ISO_DURATION = re.compile(r"^P(?:\d+D)?T?(?:(\d+)H)?(?:(\d+)M)?", re.IGNORECASE)
+
+
+def iso_minutes(value: str | None) -> int | None:
+    """Convert an ISO 8601 duration like 'PT1H5M' to minutes."""
+    if not value:
+        return None
+    match = _ISO_DURATION.match(value)
+    if not match or not any(match.groups()):
+        return None
+    hours, minutes = (int(g) if g else 0 for g in match.groups())
+    return hours * 60 + minutes
 
 
 class HelloFreshCoordinator(DataUpdateCoordinator):
@@ -62,10 +76,15 @@ class HelloFreshCoordinator(DataUpdateCoordinator):
                             if selection and selection.get("quantity", 0) > 0:
                                 recipe = meal.get("recipe", {})
                                 selected_meals.append({
+                                    "id": recipe.get("id"),
+                                    "quantity": selection.get("quantity", 1),
                                     "name": recipe.get("name"),
                                     "headline": recipe.get("headline"),
                                     "image": recipe.get("image"),
                                     "prep_time": recipe.get("prepTime"),
+                                    "prep_minutes": iso_minutes(recipe.get("prepTime")),
+                                    "total_minutes": iso_minutes(recipe.get("totalTime")),
+                                    "cuisines": [c.get("name") for c in recipe.get("cuisines", []) if c.get("name")],
                                     "website_url": recipe.get("websiteURL"),
                                     "tags": [
                                         t.get("name")
