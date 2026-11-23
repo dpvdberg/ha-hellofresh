@@ -4,10 +4,11 @@ import re
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers.storage import Store
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
 from .api import HelloFreshAPI
-from .const import CONF_USERNAME, CONF_PASSWORD, SCAN_INTERVAL_MINUTES
+from .const import CONF_USERNAME, CONF_PASSWORD, DOMAIN, SCAN_INTERVAL_MINUTES
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -36,6 +37,11 @@ class HelloFreshCoordinator(DataUpdateCoordinator):
             update_interval=timedelta(minutes=SCAN_INTERVAL_MINUTES),
         )
         self.api = HelloFreshAPI(entry.data[CONF_USERNAME], entry.data[CONF_PASSWORD])
+        # The deliveries endpoint only lists the current and upcoming weeks. Once a week has been
+        # delivered its box size (SKU) is no longer known, and asking the menu with the default SKU
+        # returns a different selection. So remember SKUs and the last good data per week.
+        self._cache = Store(hass, 1, f"{DOMAIN}.{entry.entry_id}")
+        self._cached: dict | None = None
 
     async def _async_update_data(self) -> dict:
         """Fetch data for current and upcoming weeks."""
@@ -47,8 +53,16 @@ class HelloFreshCoordinator(DataUpdateCoordinator):
             next_week = self.api.next_delivery_week
             modifiable_week = self.api.next_modifiable_week
 
+            if self._cached is None:
+                self._cached = await self._cache.async_load() or {}
+            cached_skus: dict = self._cached.setdefault("week_skus", {})
+            cached_weeks: dict = self._cached.setdefault("weeks", {})
+
             # Fetch per-week delivery info (includes correct SKU per week)
             await self.api.async_get_deliveries()
+            known_skus = {**cached_skus, **self.api._week_skus}
+            self.api._week_skus.update(known_skus)
+            cached_skus.update(known_skus)
 
             # Extract delivery timing info from subscription
             delivery_weekday = sub.get("deliveryWeekday", 1)  # 1=Monday
@@ -68,6 +82,12 @@ class HelloFreshCoordinator(DataUpdateCoordinator):
             if next_week:
                 for offset in range(-1, 4):
                     week_str = self.api.week_offset(next_week, offset)
+                    if week_str < next_week and (week_str in cached_weeks or week_str not in known_skus):
+                        # Delivered week: keep what we saw before delivery. Asking HelloFresh again
+                        # (possibly with an unknown box size) returns a different, wrong selection.
+                        if week_str in cached_weeks:
+                            weeks_data[week_str] = {**cached_weeks[week_str], "locked": True}
+                        continue
                     menu = await self.api.async_get_menu(week_str)
                     if menu:
                         selected_meals = []
@@ -104,6 +124,15 @@ class HelloFreshCoordinator(DataUpdateCoordinator):
                             "delivery_date": delivery_date.isoformat(),
                             "cutoff_date": cutoff_date.strftime("%Y-%m-%dT23:59:59"),
                         }
+
+            # Remember the data per week, so a delivered week keeps showing what was in the box.
+            cached_weeks.update(weeks_data)
+            oldest = self.api.week_offset(next_week, -8) if next_week else ""
+            for key in [k for k in cached_weeks if k < oldest]:
+                cached_weeks.pop(key)
+            for key in [k for k in cached_skus if k < oldest]:
+                cached_skus.pop(key)
+            await self._cache.async_save(self._cached)
 
             # Determine next modifiable week's preselected status and cutoff
             modifiable_preselected = False
